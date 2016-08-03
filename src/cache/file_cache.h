@@ -48,12 +48,8 @@ namespace string {
     explicit type(const String& str) : base_type(str) {} \
   }
 
-DEFINE_STRING_TYPE(HandledSource);
-DEFINE_STRING_TYPE(UnhandledSource);
-DEFINE_STRING_TYPE(ExtraFile);
+DEFINE_STRING_TYPE(FileContents);
 DEFINE_STRING_TYPE(Hash);
-DEFINE_STRING_SUBTYPE(HandledHash, Hash);
-DEFINE_STRING_SUBTYPE(UnhandledHash, Hash);
 DEFINE_STRING_TYPE(CommandLine);
 DEFINE_STRING_TYPE(Version);
 
@@ -98,58 +94,36 @@ class FileCache {
   bool Run(ui64 clean_period);
   // |clean_period| is in seconds.
 
-  static string::HandledHash Hash(string::HandledSource code,
+  static string::Hash HashHandled(const List<string::FileContents>& files,
                                   string::CommandLine command_line,
                                   string::Version version);
 
-  static string::HandledHash Hash(string::HandledSource code,
-                                  const Vector<string::ExtraFile>& extra_files,
-                                  string::CommandLine command_line,
-                                  string::Version version);
-
-  static string::UnhandledHash Hash(string::UnhandledSource code,
+  static string::Hash HashUnhandled(const List<string::FileContents>& files,
                                     string::CommandLine command_line,
                                     string::Version version);
 
-  static string::UnhandledHash Hash(
-      string::UnhandledSource code,
-      const Vector<string::ExtraFile>& extra_files,
-      string::CommandLine command_line, string::Version version);
+  bool FindHandled(const List<string::FileContents>& files,
+                   string::CommandLine command_line,
+                   string::Version version,
+                   Entry* entry) const;
 
-  bool Find(string::HandledSource code, string::CommandLine command_line,
-            string::Version version, Entry* entry) const;
+  bool FindUnhandled(const List<string::FileContents>& files,
+                     string::CommandLine command_line,
+                     string::Version version,
+                     const String& current_dir,
+                     Entry* entry) const;
 
-  bool Find(string::HandledSource code,
-            const Vector<string::ExtraFile>& extra_files,
-            string::CommandLine command_line, string::Version version,
-            Entry* entry) const;
+  void StoreHandled(const List<string::FileContents>& files,
+                    string::CommandLine command_line,
+                    string::Version version,
+                    const Entry& entry);
 
-  bool Find(string::UnhandledSource code, string::CommandLine command_line,
-            string::Version version, const String& current_dir,
-            Entry* entry) const;
-
-  bool Find(string::UnhandledSource code,
-            const Vector<string::ExtraFile>& extra_files,
-            string::CommandLine command_line, string::Version version,
-            const String& current_dir, Entry* entry) const;
-
-  void Store(string::UnhandledSource code, string::CommandLine command_line,
-             string::Version version, const List<String>& headers,
-             const String& current_dir, string::HandledHash hash);
-
-  void Store(string::UnhandledSource code,
-             const Vector<string::ExtraFile>& extra_files,
-             string::CommandLine command_line, string::Version version,
-             const List<String>& headers, const String& current_dir,
-             string::HandledHash hash);
-
-  void Store(string::HandledSource code, string::CommandLine command_line,
-             string::Version version, const Entry& entry);
-
-  void Store(string::HandledSource code,
-             const Vector<string::ExtraFile>& extra_files,
-             string::CommandLine command_line, string::Version version,
-             const Entry& entry);
+  void StoreUnhandled(const List<string::FileContents>& files,
+                      string::CommandLine command_line,
+                      string::Version version,
+                      const List<String>& headers,
+                      const String& current_dir,
+                      string::Hash hash);
 
  private:
   FRIEND_TEST(FileCacheTest, DoubleLocks);
@@ -196,19 +170,20 @@ class FileCache {
   friend class ReadLock;
   friend class WriteLock;
 
-  inline String SecondPath(string::Hash hash) const {
+  inline String GetCacheFilesDirectory(string::Hash hash) const {
     DCHECK(hash.str.size() >= 2);
-    return path_ + "/" + hash.str[0] + "/" + hash.str[1];
+    return path_ + "/" + hash.str[0] + "/" + hash.str[1] + "/";
   }
 
-  inline String CommonPath(string::Hash hash) const {
-    return SecondPath(hash) + "/" + hash.str.string_copy();
+  inline String GetCacheFilesPrefix(string::Hash hash) const {
+    return GetCacheFilesDirectory(hash) + hash.str.string_copy();
   }
 
-  bool FindByHash(string::HandledHash hash, Entry* entry) const;
-  void DoStore(string::HandledHash hash, Entry entry);
-  void DoStore(string::UnhandledHash orig_hash, const List<String>& headers,
-               const String& current_dir, const string::HandledHash& hash);
+  bool FindByHash(string::Hash hash, Entry* entry) const;
+
+  void DoStoreHandled(const string::Hash& hash, Entry entry);
+  void DoStoreUnhandled(const string::Hash& orig_hash, const List<String>& headers,
+                        const String& current_dir, const string::Hash& hash);
 
   using TimeHashPair = Pair<ui64 /* mtime */, string::Hash>;
   using EntryList = base::LockedList<TimeHashPair>;

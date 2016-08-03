@@ -11,7 +11,7 @@ namespace cache {
 
 namespace {
 
-bool Version_0_to_1(const String& common_path, ui32 to_version,
+bool Version_0_to_1(const String& cache_files_prefix, ui32 to_version,
                     proto::Manifest& manifest, bool& modified) {
   if (manifest.version() != 0 || to_version < 1) {
     return true;
@@ -33,7 +33,7 @@ bool Version_0_to_1(const String& common_path, ui32 to_version,
     v1->set_dep(manifest.deps());
 
     if (manifest.v1().err()) {
-      const String err_path = common_path + ".stderr";
+      const String err_path = cache_files_prefix + ".stderr";
       if (base::File::Exists(err_path)) {
         size += base::File::Size(err_path);
       } else {
@@ -41,7 +41,7 @@ bool Version_0_to_1(const String& common_path, ui32 to_version,
       }
     }
     if (manifest.v1().obj()) {
-      const String obj_path = common_path + ".o";
+      const String obj_path = cache_files_prefix + ".o";
       if (base::File::Exists(obj_path)) {
         size += base::File::Size(obj_path);
       } else {
@@ -49,7 +49,7 @@ bool Version_0_to_1(const String& common_path, ui32 to_version,
       }
     }
     if (manifest.v1().dep()) {
-      const String dep_path = common_path + ".d";
+      const String dep_path = cache_files_prefix + ".d";
       if (base::File::Exists(dep_path)) {
         size += base::File::Size(dep_path);
       } else {
@@ -73,7 +73,7 @@ bool Version_0_to_1(const String& common_path, ui32 to_version,
 
 // Remove old direct cache entries since they contain absolute paths. And we
 // can't distinguish which paths should shortened and which not.
-bool Version_1_to_2(const String& common_path, ui32 to_version,
+bool Version_1_to_2(const String& cache_files_prefix, ui32 to_version,
                     proto::Manifest& manifest, bool& modified) {
   if (manifest.version() != 1 || to_version < 2) {
     return true;
@@ -93,8 +93,8 @@ bool Version_1_to_2(const String& common_path, ui32 to_version,
 bool FileCache::Migrate(string::Hash hash, ui32 to_version) const {
   DCHECK(to_version <= kManifestVersion);
 
-  const String common_path = CommonPath(hash);
-  const String manifest_path = common_path + ".manifest";
+  const String cache_files_prefix = GetCacheFilesPrefix(hash);
+  const String manifest_path = cache_files_prefix + ".manifest";
 
   SQLite::Value entry;
   if (entries_ && entries_->Get(hash.str, &entry) &&
@@ -111,15 +111,15 @@ bool FileCache::Migrate(string::Hash hash, ui32 to_version) const {
     return false;
   }
 
-#define MIGRATE(from, to)                                          \
-  if (!Version_##from##_to_##to(common_path, to_version, manifest, \
-                                modified)) {                       \
-    LOG(CACHE_ERROR) << "Failed to migrate " << manifest_path      \
-                     << " from version " #from " to " #to;         \
-    return false;                                                  \
-  } else {                                                         \
-    LOG(CACHE_VERBOSE) << "Migrated " << manifest_path             \
-                       << " from version " #from " to " #to;       \
+#define MIGRATE(from, to)                                                 \
+  if (!Version_##from##_to_##to(cache_files_prefix, to_version, manifest, \
+                                modified)) {                              \
+    LOG(CACHE_ERROR) << "Failed to migrate " << manifest_path             \
+                     << " from version " #from " to " #to;                \
+    return false;                                                         \
+  } else {                                                                \
+    LOG(CACHE_VERBOSE) << "Migrated " << manifest_path                    \
+                       << " from version " #from " to " #to;              \
   }
 
   MIGRATE(0, 1);

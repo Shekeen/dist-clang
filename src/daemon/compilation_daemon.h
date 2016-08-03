@@ -21,16 +21,14 @@ class CompilationDaemon : public BaseDaemon {
  protected:
   explicit CompilationDaemon(const proto::Configuration& configuration);
 
-  cache::string::HandledHash GenerateHash(
-      const base::proto::Flags& flags, const cache::string::HandledSource& code,
-      const Vector<cache::string::ExtraFile>& extra_files) const;
+  cache::string::Hash GenerateHash(const base::proto::Flags& flags,
+                                   const List<cache::string::FileContents>& files) const;
 
   bool SetupCompiler(base::proto::Flags* flags,
                      net::proto::Status* status) const;
 
   bool SearchSimpleCache(const base::proto::Flags& flags,
-                         const cache::string::HandledSource& source,
-                         const Vector<cache::string::ExtraFile>& extra_files,
+                         const List<cache::string::FileContents>& files,
                          cache::FileCache::Entry* entry) const;
 
   bool SearchDirectCache(const base::proto::Flags& flags,
@@ -38,13 +36,11 @@ class CompilationDaemon : public BaseDaemon {
                          cache::FileCache::Entry* entry) const;
 
   void UpdateSimpleCache(const base::proto::Flags& flags,
-                         const cache::string::HandledSource& source,
-                         const Vector<cache::string::ExtraFile>& extra_files,
+                         const List<cache::string::FileContents>& files,
                          const cache::FileCache::Entry& entry);
 
   void UpdateDirectCache(const base::proto::Local* message,
-                         const cache::string::HandledSource& source,
-                         const Vector<cache::string::ExtraFile>& extra_files,
+                         const Vector<cache::string::FileContents>& files,
                          const cache::FileCache::Entry& entry);
 
   inline SharedPtr<const proto::Configuration> conf() const { return conf_; }

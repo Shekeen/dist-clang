@@ -29,6 +29,10 @@ inline String GetRelativePath(const String& current_dir, const String& input) {
              : input;
 }
 
+inline String GetFullPath(const String& current_dir, const String& input) {
+  return input[0] == '/' ? input : current_dir + "/" + input;
+}
+
 inline CommandLine CommandLineForSimpleCache(const base::proto::Flags& flags) {
   String command_line =
       base::JoinString<' '>(flags.other().begin(), flags.other().end());
@@ -83,25 +87,27 @@ bool ParseDeps(String deps, List<String>& headers) {
   return true;
 }
 
-Vector<ExtraFile> ReadExtraFiles(const base::proto::Flags& flags,
-                                 const String& current_dir) {
-  if (!flags.has_sanitize_blacklist()) {
-    return Vector<ExtraFile>();
+List<FileContents> ReadFilesContents(const base::proto::Flags& flags, const String& current_dir) {
+  FileContents input_contents;
+  const String input = GetFullPath(current_dir, flags.input());
+  if (!base::File::Read(input, &input_contents.str)) {
+    LOG(ERROR) << "Failed to read input file " << input;
+    return List<FileContents>{};
   }
 
-  ExtraFile sanitize_blacklist_contents;
-  const String sanitize_blacklist =
-      flags.sanitize_blacklist()[0] != '/'
-          ? current_dir + "/" + flags.sanitize_blacklist()
-          : flags.sanitize_blacklist();
+  if (!flags.has_sanitize_blacklist()) {
+    return List<FileContents>{input_contents};
+  }
 
+  FileContents sanitize_blacklist_contents;
+  const String sanitize_blacklist = GetFullPath(current_dir, flags.sanitize_blacklist());
   if (!base::File::Read(sanitize_blacklist, &sanitize_blacklist_contents.str)) {
     LOG(CACHE_ERROR) << "Failed to read sanitize blacklist file "
                      << sanitize_blacklist;
-    return Vector<ExtraFile>();
+    return List<FileContents>{input_contents};
   }
 
-  return Vector<ExtraFile>{sanitize_blacklist_contents};
+  return List<FileContents>{input_contents, sanitize_blacklist_contents};
 }
 
 }  // namespace
@@ -184,12 +190,10 @@ CompilationDaemon::CompilationDaemon(const proto::Configuration& configuration)
   }
 }
 
-HandledHash CompilationDaemon::GenerateHash(
-    const base::proto::Flags& flags, const HandledSource& code,
-    const Vector<ExtraFile>& extra_files) const {
+Hash CompilationDaemon::GenerateHash(const base::proto::Flags& flags,
+                                     const List<FileContents>& files) const {
   const Version version(flags.compiler().version());
-  return cache::FileCache::Hash(code, extra_files,
-                                CommandLineForSimpleCache(flags), version);
+  return cache::FileCache::HashHandled(files, CommandLineForSimpleCache(flags), version);
 }
 
 bool CompilationDaemon::SetupCompiler(base::proto::Flags* flags,
@@ -255,8 +259,8 @@ bool CompilationDaemon::SetupCompiler(base::proto::Flags* flags,
 }
 
 bool CompilationDaemon::SearchSimpleCache(
-    const base::proto::Flags& flags, const HandledSource& source,
-    const Vector<ExtraFile>& extra_files,
+    const base::proto::Flags& flags,
+    const List<FileContents>& files,
     cache::FileCache::Entry* entry) const {
   if (!cache_) {
     return false;
@@ -265,7 +269,7 @@ bool CompilationDaemon::SearchSimpleCache(
   const Version version(flags.compiler().version());
   const auto command_line = CommandLineForSimpleCache(flags);
 
-  if (!cache_->Find(source, extra_files, command_line, version, entry)) {
+  if (!cache_->FindHandled(files, command_line, version, entry)) {
     LOG(CACHE_INFO) << "Cache miss: " << flags.input();
     return false;
   }
@@ -290,14 +294,12 @@ bool CompilationDaemon::SearchDirectCache(
                            : flags.input();
   const CommandLine command_line(CommandLineForDirectCache(current_dir, flags));
 
-  UnhandledSource code;
-  if (!base::File::Read(input, &code.str)) {
+  List<FileContents> files = ReadFilesContents(flags, current_dir);
+  if (files.empty()) {
     return false;
   }
 
-  Vector<ExtraFile> extra_files = ReadExtraFiles(flags, current_dir);
-  if (!cache_->Find(code, extra_files, command_line, version, current_dir,
-                    entry)) {
+  if (!cache_->FindUnhandled(files, command_line, version, current_dir, entry)) {
     LOG(CACHE_INFO) << "Direct cache miss: " << flags.input();
     return false;
   }
@@ -306,8 +308,7 @@ bool CompilationDaemon::SearchDirectCache(
 }
 
 void CompilationDaemon::UpdateSimpleCache(
-    const base::proto::Flags& flags, const HandledSource& source,
-    const Vector<ExtraFile>& extra_files,
+    const base::proto::Flags& flags, const List<FileContents>& files,
     const cache::FileCache::Entry& entry) {
   const Version version(flags.compiler().version());
   const auto command_line = CommandLineForSimpleCache(flags);
@@ -316,12 +317,11 @@ void CompilationDaemon::UpdateSimpleCache(
     return;
   }
 
-  cache_->Store(source, extra_files, command_line, version, entry);
+  cache_->StoreHandled(files, command_line, version, entry);
 }
 
 void CompilationDaemon::UpdateDirectCache(
-    const base::proto::Local* message, const HandledSource& source,
-    const Vector<ExtraFile>& extra_files,
+    const base::proto::Local* message, const List<FileContents>& files,
     const cache::FileCache::Entry& entry) {
   const auto& flags = message->flags();
   auto config = conf();
@@ -339,19 +339,16 @@ void CompilationDaemon::UpdateDirectCache(
   }
 
   const Version version(flags.compiler().version());
-  const auto hash = cache_->Hash(source, extra_files,
-                                 CommandLineForSimpleCache(flags), version);
+  const auto hash = cache_->HashHandled(files, CommandLineForSimpleCache(flags), version);
   const auto command_line =
       CommandLineForDirectCache(message->current_dir(), flags);
-  const String input_path = flags.input()[0] != '/'
-                                ? message->current_dir() + "/" + flags.input()
-                                : flags.input();
+  const String input_path = GetFullPath(message->current_dir(), flags.input());
   List<String> headers;
-  UnhandledSource original_code;
+  FileContents original_code;
 
   if (ParseDeps(entry.deps, headers) &&
       base::File::Read(input_path, &original_code.str)) {
-    cache_->Store(original_code, extra_files, command_line, version, headers,
+    cache_->StoreUnhandled(original_code, extra_files, command_line, version, headers,
                   message->current_dir(), hash);
   } else {
     LOG(CACHE_ERROR) << "Failed to parse deps or read input " << input_path;
