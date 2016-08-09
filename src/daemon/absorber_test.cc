@@ -30,13 +30,6 @@ net::Connection::ScopedMessage CreateMessage(
   return message;
 }
 
-void AddSanitizeBlacklist(const String& sanitize_blacklist,
-                          net::Connection::Message* message) {
-  message->MutableExtension(proto::Remote::extension)
-      ->mutable_flags()
-      ->set_sanitize_blacklist(sanitize_blacklist);
-}
-
 net::proto::Status StatusFor(net::proto::Status::Code status_code) {
   net::proto::Status status;
   status.set_code(status_code);
