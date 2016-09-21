@@ -69,9 +69,9 @@ Configuration::Configuration() {
 
     base::SplitString<' '>(log_levels, numbers);
     if (numbers.size() % 2 == 0) {
-      config_.mutable_verbosity()->clear_levels();
+      config_.mutable_log_config()->clear_levels();
       for (auto number = numbers.begin(); number != numbers.end(); ++number) {
-        auto* range = config_.mutable_verbosity()->add_levels();
+        auto* range = config_.mutable_log_config()->add_levels();
         range->set_left(base::StringTo<ui32>(*number++));
         range->set_right(base::StringTo<ui32>(*number));
       }
@@ -80,7 +80,7 @@ Configuration::Configuration() {
 
   Immutable error_mark = base::GetEnv(base::kEnvLogErrorMark);
   if (!error_mark.empty()) {
-    config_.mutable_verbosity()->set_error_mark(
+    config_.mutable_log_config()->set_error_mark(
         base::StringTo<ui32>(error_mark));
   }
 

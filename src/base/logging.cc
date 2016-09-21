@@ -44,11 +44,13 @@ void Log::Reset(ui32 error_mark, RangeSet&& ranges) {
   Log::ranges().reset(new RangeSet(std::move(ranges)));
 }
 
-Log::Log(ui32 level)
+Log::Log(ui32 level, String&& file, String&& line)
     : level_(level),
       error_mark_(error_mark()),
       ranges_(ranges()),
-      mode_(mode()) {}
+      mode_(mode()),
+      file_(std::move(file)),
+      line_(std::move(line)) {}
 
 Log::~Log() {
   auto it = ranges_->lower_bound(std::make_pair(level_, 0));

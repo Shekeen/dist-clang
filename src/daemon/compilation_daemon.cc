@@ -135,37 +135,40 @@ CompilationDaemon::CompilationDaemon(const proto::Configuration& configuration)
 
   // Setup log's verbosity early - even before configuration integrity check.
   // Everything else is done in the method |Initialize()|.
-  if (conf_->has_verbosity()) {
-    base::Log::RangeSet ranges;
-    for (const auto& level : conf_->verbosity().levels()) {
-      if (level.has_left() && level.left() > level.right()) {
-        continue;
-      }
+  if (conf_->has_log_config()) {
+    InitializeLogging(conf_->log_config());
+  }
+}
 
-      if (!level.has_left()) {
-        ranges.emplace(level.right(), level.right());
-      } else {
-        ranges.emplace(level.left(), level.right());
-      }
+void CompilationDaemon::InitializeLogging(const proto::LogConfig& log_config) {
+  base::Log::RangeSet ranges;
+  for (const auto& level: log_config.levels()) {
+    if (level.has_left() && level.left() > level.right()) {
+      continue;
     }
 
-    base::Log::RangeSet range_set;
-    if (!ranges.empty()) {
-      auto current = *ranges.begin();
-      if (ranges.size() > 1) {
-        for (auto it = std::next(ranges.begin()); it != ranges.end(); ++it) {
-          if (current.second + 1 >= it->first) {
-            current.second = std::max(it->second, current.second);
-          } else {
-            range_set.emplace(current.second, current.first);
-            current = *it;
-          }
+    ranges.emplace(level.has_left() ? level.left()
+                                    : level.right(),
+                   level.right());
+  }
+
+  base::Log::RangeSet range_set;
+  if (!ranges.empty()) {
+    auto current = *ranges.begin();
+    if (ranges.size() > 1) {
+      for (auto it = std::next(ranges.begin()); it != ranges.end(); ++it) {
+        if (current.second + 1 >= it->first) {
+          current.second = std::max(it->second, current.second);
+        } else {
+          range_set.emplace(current.second, current.first);
+          current = *it;
         }
       }
-      range_set.emplace(current.second, current.first);
     }
-    base::Log::Reset(conf_->verbosity().error_mark(), std::move(range_set));
+    range_set.emplace(current.second, current.first);
   }
+
+  base::Log::Reset(log_config.error_mark(), std::move(range_set));
 }
 
 HandledHash CompilationDaemon::GenerateHash(

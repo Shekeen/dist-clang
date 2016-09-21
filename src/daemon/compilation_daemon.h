@@ -54,6 +54,8 @@ class CompilationDaemon : public BaseDaemon {
   inline SharedPtr<const proto::Configuration> conf() const { return conf_; }
 
  private:
+  void InitializeLogging(const base::proto::LogConfig& verbosity);
+
   using PluginNameMap = HashMap<String /* name */, String /* path */>;
 
   SharedPtr<const proto::Configuration> conf_;

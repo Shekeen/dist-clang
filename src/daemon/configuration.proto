@@ -61,8 +61,8 @@ message Configuration {
   optional uint32 pool_capacity   = 4 [ default = 16 ];
   // 0 - is unlimited.
 
-  repeated base.proto.Compiler versions = 5;
-  optional base.proto.Verbosity verbosity  = 6;
+  repeated base.proto.Compiler versions     = 5;
+  optional base.proto.LogConfig log_config  = 6;
   optional uint32 user_id         = 7;
 
   optional string config_path     = 8;

@@ -147,7 +147,25 @@ class Log {
 
   Log& operator<<(std::ostream& (*func)(std::ostream&));  // for |std::endl|
 
+  class Formatter {
+   public:
+    Formatter(const String& format);
+
+    LogEntryBuilder format();
+  };
+
  private:
+  class LogEntryBuilder {
+   public:
+    LogEntryBuilder(const Formatter& formatter);
+
+    LogEntryBuilder WithLevel(ui32 level);
+    LogEntryBuilder WithFile(const String& file);
+    LogEntryBuilder WithLine(const String& line);
+    LogEntryBuilder WithDateTime();
+    String Build();
+  };
+
   static ui32& error_mark();
   static SharedPtr<RangeSet>& ranges();
   static Mode& mode();
@@ -157,6 +175,8 @@ class Log {
   SharedPtr<RangeSet> ranges_;
   std::stringstream stream_;
   Mode mode_ = CONSOLE;
+  String file_;
+  String line_;
 };
 
 }  // namespace base

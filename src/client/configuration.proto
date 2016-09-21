@@ -33,5 +33,5 @@ message Configuration {
 
   repeated Plugin plugins         = 7;
   optional bool disabled          = 8 [ default = false ];
-  optional base.proto.Verbosity verbosity = 9;
+  optional base.proto.LogConfig log_config = 9;
 }
