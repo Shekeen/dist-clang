@@ -25,7 +25,7 @@ namespace base {
 //     LOG(ERROR) << "Message";
 //
 // in any part of code, we need a separate namespace with an enum only, to
-// include it with "using namespace NamedLevels;". See using_log.h file.
+// include it with "using namespace named_levels;". See using_log.h file.
 
 namespace named_levels {
 
@@ -102,7 +102,7 @@ enum : ui32 {
 #pragma pop_macro("DB_INFO")
 #pragma pop_macro("DB_VERBOSE")
 
-}  // namespace NamedLevels
+}  // namespace named_levels
 
 class Log {
  public:
@@ -119,8 +119,9 @@ class Log {
 
   // Expects, that ranges are already filtered.
   static void Reset(ui32 error_mark, RangeSet&& ranges);
+  static void Reset(ui32 error_mark, RangeSet&& ranges, const String& format);
 
-  Log(ui32 level);
+  Log(ui32 level, String&& file, String&& line);
   ~Log();
 
   Log(Log&&) = default;
@@ -151,7 +152,19 @@ class Log {
    public:
     Formatter(const String& format);
 
-    LogEntryBuilder format();
+    String format();
+
+   private:
+    enum LogVar {
+      LEVEL,
+      FILE,
+      LINE,
+      DATETIME,
+    }
+    static HashMap<String, LogVar> log_vars_;
+
+    Vector<String> log_entry_chunks_;
+    HashMap<LogVar, size_t> keyword_chunks_indices_;
   };
 
  private:
@@ -169,14 +182,15 @@ class Log {
   static ui32& error_mark();
   static SharedPtr<RangeSet>& ranges();
   static Mode& mode();
+  static Formatter& formatter();
 
   ui32 level_;
   ui32 error_mark_;
   SharedPtr<RangeSet> ranges_;
-  std::stringstream stream_;
-  Mode mode_ = CONSOLE;
   String file_;
   String line_;
+  std::stringstream stream_;
+  Mode mode_ = CONSOLE;
 };
 
 }  // namespace base

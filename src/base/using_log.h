@@ -25,7 +25,7 @@ using namespace dist_clang::base::named_levels;
 
 #define LOG(level) dist_clang::base::Log(level, __FILE__, __LINE__)
 #if defined(NDEBUG)
-#define DLOG(level) std::stringstream()
+#define DLOG(level) std::stringstream() << "[" << __FILE__ << ":" << __LINE__ << "] "
 #else
 #define DLOG(level) LOG(level)
 #endif

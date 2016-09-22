@@ -2,6 +2,7 @@
 
 #include <base/const_string.h>
 
+#include STL(cctype)
 #include STL(iostream)
 
 #if !defined(OS_WIN)
@@ -48,9 +49,9 @@ Log::Log(ui32 level, String&& file, String&& line)
     : level_(level),
       error_mark_(error_mark()),
       ranges_(ranges()),
-      mode_(mode()),
       file_(std::move(file)),
-      line_(std::move(line)) {}
+      line_(std::move(line)),
+      mode_(mode()) {}
 
 Log::~Log() {
   auto it = ranges_->lower_bound(std::make_pair(level_, 0));
@@ -103,6 +104,54 @@ Log& Log::operator<<(std::ostream& (*func)(std::ostream&)) {
   return *this;
 }
 
+HashMap<String, Log::Formatter::LogVar>
+Log::Formatter::log_vars_ {
+  {"level", LEVEL},
+  {"file", FILE},
+  {"line", LINE},
+  {"datetime", DATETIME},
+};
+
+Log::Formatter::Formatter(const String& format)
+    : log_entry_chunks_()
+      keyword_chunks_indices_() {
+  size_t prev_index = 0;
+  size_t cur_index = 0;
+  size_t keyword_index = 0;
+  while (cur_index < format.length()) {
+    if (format[cur_index] == '%') {
+      keyword_index = cur_index + 1;
+      while (keyword_index < format.length() && std::isalpha(format[keyword_index])) {
+        ++keyword_index;
+      }
+      if (cur_index + 1 < keyword_index) {
+        if (cur_index > prev_index) {
+          log_entry_chunks_.emplace_back(String(format, prev_index, cur_index - prev_index));
+        }
+        log_entry_chunks_.emplace_back(String(format, cur_index, keyword_index - cur_index));
+        prev_index = cur_index = keyword_index;
+      }
+    }
+    ++cur_index;
+  }
+  if (cur_index > prev_index) {
+    log_entry_chunks_.emplace_back(String(format, prev_index, cur_index - prev_index));
+  }
+
+  for (size_t i = 0; i < log_entry_chunks_; ++i) {
+    if (log_entry_chunks_[i][0] == '%') {
+      String log_var(log_entry_chunks_[i], 1);
+      if ((auto log_vars_entry = log_vars_.find(log_var)) != log_vars_.end()) {
+        keyword_chunks_indices_.emplace(log_vars_entry.second, i);
+      }
+    }
+  }
+}
+
+String Log::Formatter::format() {
+  return "";
+}
+
 // static
 ui32& Log::error_mark() {
   static ui32 error_mark = 0;
@@ -120,6 +169,12 @@ SharedPtr<Log::RangeSet>& Log::ranges() {
 Log::Mode& Log::mode() {
   static Mode mode = CONSOLE;
   return mode;
+}
+
+// static
+Log::Formatter& Log::formatter() {
+  static Formatter formatter("[%level] ");
+  return formatter;
 }
 
 }  // namespace base
