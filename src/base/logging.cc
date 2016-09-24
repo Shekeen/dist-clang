@@ -45,12 +45,29 @@ void Log::Reset(ui32 error_mark, RangeSet&& ranges) {
   Log::ranges().reset(new RangeSet(std::move(ranges)));
 }
 
-Log::Log(ui32 level, String&& file, String&& line)
+// static
+void Log::Reset(ui32 error_mark, RangeSet&& ranges, const String& format) {
+  ui32 prev = 0;
+  for (const auto& range : ranges) {
+    if ((prev > 0 && range.second <= prev) || range.second > range.first) {
+      // FIXME: there should be NOTREACHED(), but it will add dependency on the
+      // |assert_*.cc| part of the base target.
+      return;
+    }
+    prev = range.first;
+  }
+
+  Log::error_mark() = error_mark;
+  Log::ranges().reset(new RangeSet(std::move(ranges)));
+  Log::formatter() = Log::Formatter(format);
+}
+
+Log::Log(ui32 level, String&& file, int line)
     : level_(level),
       error_mark_(error_mark()),
       ranges_(ranges()),
       file_(std::move(file)),
-      line_(std::move(line)),
+      line_(line),
       mode_(mode()) {}
 
 Log::~Log() {
@@ -59,32 +76,35 @@ Log::~Log() {
       level_ == named_levels::ASSERT) {
     stream_ << std::endl;
 
+    String log_prefix = formatter().format(*this);
+
     if (mode_ == CONSOLE) {
       auto& output_stream = (level_ <= error_mark_) ? std::cerr : std::cout;
-      output_stream << stream_.str() << std::flush;
+      output_stream << log_prefix << stream_.str() << std::flush;
     } else if (mode_ == SYSLOG) {
 #if !defined(OS_WIN)
       // FIXME: not really a fair mapping.
       switch (level_) {
         case named_levels::FATAL:
         case named_levels::ASSERT:
-          syslog(LOG_CRIT, "%s", stream_.str().c_str());
+          syslog(LOG_CRIT, "%s%s", log_prefix.c_str(), stream_.str().c_str());
           break;
 
         case named_levels::ERROR:
-          syslog(LOG_ERR, "%s", stream_.str().c_str());
+          syslog(LOG_ERR, "%s%s", log_prefix.c_str(), stream_.str().c_str());
           break;
 
         case named_levels::WARNING:
-          syslog(LOG_WARNING, "%s", stream_.str().c_str());
+          syslog(LOG_WARNING, "%s%s", log_prefix.c_str(),
+                 stream_.str().c_str());
           break;
 
         case named_levels::INFO:
-          syslog(LOG_NOTICE, "%s", stream_.str().c_str());
+          syslog(LOG_NOTICE, "%s%s", log_prefix.c_str(), stream_.str().c_str());
           break;
 
         default:
-          syslog(LOG_INFO, "%s", stream_.str().c_str());
+          syslog(LOG_INFO, "%s%s", log_prefix.c_str(), stream_.str().c_str());
       }
 #endif  // !defined(OS_WIN)
     }
@@ -104,52 +124,90 @@ Log& Log::operator<<(std::ostream& (*func)(std::ostream&)) {
   return *this;
 }
 
-HashMap<String, Log::Formatter::LogVar>
-Log::Formatter::log_vars_ {
-  {"level", LEVEL},
-  {"file", FILE},
-  {"line", LINE},
-  {"datetime", DATETIME},
+ui32 Log::level() const {
+  return level_;
+}
+
+const String& Log::file() const {
+  return file_;
+}
+
+int Log::line() const {
+  return line_;
+}
+
+HashMap<String, Log::Formatter::LogVar> Log::Formatter::log_vars_{
+    {"level", LEVEL}, {"file", FILE}, {"line", LINE}, {"datetime", DATETIME},
 };
 
 Log::Formatter::Formatter(const String& format)
-    : log_entry_chunks_()
-      keyword_chunks_indices_() {
+    : log_entry_chunks_(), logvar_chunks_() {
   size_t prev_index = 0;
   size_t cur_index = 0;
   size_t keyword_index = 0;
   while (cur_index < format.length()) {
     if (format[cur_index] == '%') {
       keyword_index = cur_index + 1;
-      while (keyword_index < format.length() && std::isalpha(format[keyword_index])) {
+      while (keyword_index < format.length() &&
+             std::isalpha(format[keyword_index])) {
         ++keyword_index;
       }
       if (cur_index + 1 < keyword_index) {
         if (cur_index > prev_index) {
-          log_entry_chunks_.emplace_back(String(format, prev_index, cur_index - prev_index));
+          log_entry_chunks_.emplace_back(
+              String(format, prev_index, cur_index - prev_index));
         }
-        log_entry_chunks_.emplace_back(String(format, cur_index, keyword_index - cur_index));
+        log_entry_chunks_.emplace_back(
+            String(format, cur_index, keyword_index - cur_index));
         prev_index = cur_index = keyword_index;
       }
     }
     ++cur_index;
   }
   if (cur_index > prev_index) {
-    log_entry_chunks_.emplace_back(String(format, prev_index, cur_index - prev_index));
+    log_entry_chunks_.emplace_back(
+        String(format, prev_index, cur_index - prev_index));
   }
 
-  for (size_t i = 0; i < log_entry_chunks_; ++i) {
+  logvar_chunks_.resize(log_entry_chunks_.size());
+  for (size_t i = 0; i < log_entry_chunks_.size(); ++i) {
     if (log_entry_chunks_[i][0] == '%') {
       String log_var(log_entry_chunks_[i], 1);
-      if ((auto log_vars_entry = log_vars_.find(log_var)) != log_vars_.end()) {
-        keyword_chunks_indices_.emplace(log_vars_entry.second, i);
+      auto log_vars_entry = log_vars_.find(log_var);
+      if (log_vars_entry != log_vars_.end()) {
+        logvar_chunks_[i] = log_vars_entry->second;
+      } else {
+        logvar_chunks_[i] = LOGVAR_NONE;
       }
     }
   }
 }
 
-String Log::Formatter::format() {
-  return "";
+String Log::Formatter::format(const Log& log) {
+  std::stringstream log_prefix_stream;
+  for (size_t i = 0; i < log_entry_chunks_.size(); ++i) {
+    if (logvar_chunks_[i] != LOGVAR_NONE) {
+      switch (logvar_chunks_[i]) {
+        case LEVEL:
+          log_prefix_stream << log.level();
+          break;
+        case FILE:
+          log_prefix_stream << log.file();
+          break;
+        case LINE:
+          log_prefix_stream << log.line();
+          break;
+        case DATETIME:
+          break;
+        default:
+          break;
+      }
+    } else {
+      log_prefix_stream << log_entry_chunks_[i];
+    }
+  }
+  log_prefix_stream << " ";
+  return log_prefix_stream.str();
 }
 
 // static
@@ -173,7 +231,7 @@ Log::Mode& Log::mode() {
 
 // static
 Log::Formatter& Log::formatter() {
-  static Formatter formatter("[%level] ");
+  static Formatter formatter("[%level]");
   return formatter;
 }
 

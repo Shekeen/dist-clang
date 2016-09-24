@@ -29,7 +29,7 @@ void GetStackTrace(ui8 depth, Vector<String>& strings);
     if (!std::uncaught_exception()) {                                        \
       throw std::runtime_error(ss.str());                                    \
     } else {                                                                 \
-      Log log(named_levels::ASSERT);                                         \
+      Log log(named_levels::ASSERT, __FILE__, __LINE__);                     \
       log << "Exception is not thrown - are we in destructor?" << std::endl; \
       return log;                                                            \
     }                                                                        \
@@ -40,7 +40,7 @@ void GetStackTrace(ui8 depth, Vector<String>& strings);
   [] {                                                 \
     using namespace dist_clang::base;                  \
     Vector<String> strings;                            \
-    Log log(named_levels::ASSERT);                     \
+    Log log(named_levels::ASSERT, __FILE__, __LINE__); \
     GetStackTrace(62, strings);                        \
     log << "Assertion failed: " << #expr << std::endl; \
     for (size_t i = 1; i < strings.size(); ++i) {      \

@@ -140,15 +140,15 @@ CompilationDaemon::CompilationDaemon(const proto::Configuration& configuration)
   }
 }
 
-void CompilationDaemon::InitializeLogging(const proto::LogConfig& log_config) {
+void CompilationDaemon::InitializeLogging(
+    const base::proto::LogConfig& log_config) {
   base::Log::RangeSet ranges;
-  for (const auto& level: log_config.levels()) {
+  for (const auto& level : log_config.levels()) {
     if (level.has_left() && level.left() > level.right()) {
       continue;
     }
 
-    ranges.emplace(level.has_left() ? level.left()
-                                    : level.right(),
+    ranges.emplace(level.has_left() ? level.left() : level.right(),
                    level.right());
   }
 
@@ -168,7 +168,12 @@ void CompilationDaemon::InitializeLogging(const proto::LogConfig& log_config) {
     range_set.emplace(current.second, current.first);
   }
 
-  base::Log::Reset(log_config.error_mark(), std::move(range_set));
+  if (log_config.has_log_format()) {
+    base::Log::Reset(log_config.error_mark(), std::move(range_set),
+                     log_config.log_format());
+  } else {
+    base::Log::Reset(log_config.error_mark(), std::move(range_set));
+  }
 }
 
 HandledHash CompilationDaemon::GenerateHash(

@@ -5,6 +5,8 @@
 #include STL(set)
 #include STL(sstream)
 
+#include <third_party/gtest/exported/include/gtest/gtest_prod.h>
+
 // The whole log facility should be minimalistic, since it may be used in a
 // third-party libraries, like gtest.
 
@@ -121,7 +123,7 @@ class Log {
   static void Reset(ui32 error_mark, RangeSet&& ranges);
   static void Reset(ui32 error_mark, RangeSet&& ranges, const String& format);
 
-  Log(ui32 level, String&& file, String&& line);
+  Log(ui32 level, String&& file, int line);
   ~Log();
 
   Log(Log&&) = default;
@@ -148,37 +150,32 @@ class Log {
 
   Log& operator<<(std::ostream& (*func)(std::ostream&));  // for |std::endl|
 
+  ui32 level() const;
+  const String& file() const;
+  int line() const;
+
   class Formatter {
    public:
     Formatter(const String& format);
 
-    String format();
+    String format(const Log& log);
 
    private:
     enum LogVar {
+      LOGVAR_NONE,
       LEVEL,
       FILE,
       LINE,
       DATETIME,
-    }
+      LOGVAR_MAX,
+    };
     static HashMap<String, LogVar> log_vars_;
 
     Vector<String> log_entry_chunks_;
-    HashMap<LogVar, size_t> keyword_chunks_indices_;
+    Vector<LogVar> logvar_chunks_;
   };
 
  private:
-  class LogEntryBuilder {
-   public:
-    LogEntryBuilder(const Formatter& formatter);
-
-    LogEntryBuilder WithLevel(ui32 level);
-    LogEntryBuilder WithFile(const String& file);
-    LogEntryBuilder WithLine(const String& line);
-    LogEntryBuilder WithDateTime();
-    String Build();
-  };
-
   static ui32& error_mark();
   static SharedPtr<RangeSet>& ranges();
   static Mode& mode();
@@ -188,7 +185,7 @@ class Log {
   ui32 error_mark_;
   SharedPtr<RangeSet> ranges_;
   String file_;
-  String line_;
+  int line_;
   std::stringstream stream_;
   Mode mode_ = CONSOLE;
 };

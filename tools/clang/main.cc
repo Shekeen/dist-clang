@@ -43,11 +43,11 @@ int main(int argc, char* argv[]) {
   // It's safe to use |base::Log|, since its internal static objects don't need
   // special destruction on |exec|.
   base::Log::RangeSet ranges;
-  for (const auto& range : config.verbosity().levels()) {
+  for (const auto& range : config.log_config().levels()) {
     ranges.emplace(range.right(), range.left());
   }
   if (!ranges.empty()) {
-    base::Log::Reset(config.verbosity().error_mark(), std::move(ranges));
+    base::Log::Reset(config.log_config().error_mark(), std::move(ranges));
   }
 
   HashMap<String, String> plugins;
@@ -66,12 +66,11 @@ int main(int argc, char* argv[]) {
   //         get destructed before the invokation of |exec|. Do not use global
   //         objects!
   // FIXME: move |configuration| et al. inside |DoMain()| after mocking |GetEnv|
-  if (client::DoMain(argc, argv, socket_path,
-                     Immutable::WrapString(config.path()),
-                     Immutable::WrapString(config.version()),
-                     config.connect_timeout(), config.read_timeout(),
-                     config.send_timeout(), config.read_minimum(),
-                     plugins, config.disabled())) {
+  if (client::DoMain(
+          argc, argv, socket_path, Immutable::WrapString(config.path()),
+          Immutable::WrapString(config.version()), config.connect_timeout(),
+          config.read_timeout(), config.send_timeout(), config.read_minimum(),
+          plugins, config.disabled())) {
     return ExecuteLocally(argv, config.path());
   }
 
