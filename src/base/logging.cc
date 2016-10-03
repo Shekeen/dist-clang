@@ -68,6 +68,8 @@ Log::Log(ui32 level, String&& file, int line)
       ranges_(ranges()),
       file_(std::move(file)),
       line_(line),
+      time_(std::chrono::system_clock::to_time_t(
+          std::chrono::system_clock::now())),
       mode_(mode()) {}
 
 Log::~Log() {
@@ -136,6 +138,10 @@ int Log::line() const {
   return line_;
 }
 
+const std::time_t& Log::time() const {
+  return time_;
+}
+
 HashMap<String, Log::Formatter::LogVar> Log::Formatter::log_vars_{
     {"level", LEVEL}, {"file", FILE}, {"line", LINE}, {"datetime", DATETIME},
 };
@@ -198,6 +204,7 @@ String Log::Formatter::format(const Log& log) {
           log_prefix_stream << log.line();
           break;
         case DATETIME:
+          log_prefix_stream << std::ctime(&log.time());
           break;
         default:
           break;

@@ -2,6 +2,8 @@
 
 #include <base/aliases.h>
 
+#include STL(chrono)
+#include STL(ctime)
 #include STL(set)
 #include STL(sstream)
 
@@ -153,6 +155,7 @@ class Log {
   ui32 level() const;
   const String& file() const;
   int line() const;
+  const std::time_t& time() const;
 
   class Formatter {
    public:
@@ -186,6 +189,7 @@ class Log {
   SharedPtr<RangeSet> ranges_;
   String file_;
   int line_;
+  std::time_t time_;
   std::stringstream stream_;
   Mode mode_ = CONSOLE;
 };
