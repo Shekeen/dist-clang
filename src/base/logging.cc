@@ -203,9 +203,14 @@ String Log::Formatter::format(const Log& log) {
         case LINE:
           log_prefix_stream << log.line();
           break;
-        case DATETIME:
-          log_prefix_stream << std::ctime(&log.time());
+        case DATETIME: {
+          const char* time = std::ctime(&log.time());
+          const char* time_end_char = time + strlen(time) - 1;
+          while (std::isspace(*time_end_char))
+            --time_end_char;
+          log_prefix_stream << String(time, time_end_char + 1);
           break;
+        }
         default:
           break;
       }

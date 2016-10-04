@@ -10,7 +10,6 @@ class LogReporter : public Reporter {
  public:
   enum Type {
     HUMAN = 1,
-    TEAMCITY = 2,
   };
 
   explicit LogReporter(Literal label, Type type = HUMAN);

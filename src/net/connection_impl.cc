@@ -33,7 +33,7 @@ ConnectionImpl::ConnectionImpl(EventLoop& event_loop, Socket&& fd,
       gzip_input_stream_(
           new GzipInputStream(&file_input_stream_, GzipInputStream::ZLIB)),
       file_output_stream_(fd_.native(), buffer_size),
-      counter_("Connection"_l, perf::LogReporter::TEAMCITY) {}
+      counter_("Connection"_l, perf::LogReporter::HUMAN) {}
 
 ConnectionImpl::~ConnectionImpl() {
   Close();

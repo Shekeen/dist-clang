@@ -19,12 +19,6 @@ void LogReporter::Report(const TimePoint& start, const TimePoint& end) const {
       LOG(TRACE) << label_ << " took "
                  << duration_cast<milliseconds>(end - start).count() << " ms";
     } break;
-
-    case TEAMCITY: {
-      LOG(TRACE) << "##teamcity[buildStatisticValue key='" << label_
-                 << "' value='"
-                 << duration_cast<milliseconds>(end - start).count() << "']";
-    } break;
   }
 }
 
